@@ -1,5 +1,6 @@
 import re
 import chemsource as cs
+import pandas as pd
 
 inchi_key_pattern = r"[A-Z]{14}-[A-Z]{10}-[A-Z]"
 cas_pattern = r"^\d{2,7}-\d{2}-\d$"
@@ -228,3 +229,30 @@ def chemsource_list_apply(synonyms, model):
         if chemsource_output[1][1] != "INFO" and chemsource_output[0][1] != '':
             return item, chemsource_output
     return item, chemsource_output
+
+def cs_output_to_upset(path_to_chemsource_dataframe):
+    if path_to_chemsource_dataframe.endswith(".csv"):
+        data = pd.read_csv(path_to_chemsource_dataframe, index_col=0)
+    elif path_to_chemsource_dataframe.endswith(".tsv"):
+        data = pd.read_csv(path_to_chemsource_dataframe, sep="\t", index_col=0)
+    else:
+        raise ValueError("Invalid file format. Please provide a .csv or .tsv file.")
+
+    data["classification"] = data["classification"].apply(lambda x: x.split(","))
+    data["classification"] = data["classification"].apply(lambda x: [y.strip() for y in x])
+
+    all_categories = set()
+    for item in data["classification"]:
+        # print(item)
+        for category in item:
+            all_categories.add(category)
+    
+    all_categories = sorted(list(all_categories))
+    # print(all_categories)
+    one_hot_encoded = pd.DataFrame(data=None, index=data.index, columns=all_categories)
+    for index, row in data.iterrows():
+        for category in row["classification"]:
+            one_hot_encoded.loc[index, category] = 1
+    
+    one_hot_encoded.fillna(0, inplace=True)
+    return one_hot_encoded
