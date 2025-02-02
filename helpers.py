@@ -1,6 +1,7 @@
 import re
 import chemsource as cs
 import pandas as pd
+import numpy as np
 
 inchi_key_pattern = r"[A-Z]{14}-[A-Z]{10}-[A-Z]"
 cas_pattern = r"^\d{2,7}-\d{2}-\d$"
@@ -256,3 +257,44 @@ def cs_output_to_upset(path_to_chemsource_dataframe):
     
     one_hot_encoded.fillna(0, inplace=True)
     return one_hot_encoded
+
+def evaluate_probs(log_prob_dict):
+    probability_dict = {} 
+    category = ""
+    probability = 0
+    for key in log_prob_dict.keys():
+        if "," in key:
+            category += key.split(",")[0]
+            category = category.strip()
+            category = category.replace(",", "")
+            probability = float(np.exp(probability))
+            probability_dict.update({category: probability})
+            category = key.split(",")[1]
+            probability = log_prob_dict[key]
+        else:
+            category += key
+            probability += log_prob_dict[key]
+    category = category.strip()
+    category = category.replace(",", "")
+    probability = float(np.exp(probability))
+    probability_dict.update({category: probability})
+    return probability_dict
+
+def cs_output_to_upset_probs(chemsource_dataframe, categories_col_name, probs_col_name):
+    data = chemsource_dataframe.copy()
+    data[categories_col_name] = data[categories_col_name].apply(lambda x: x.split(","))
+    data[categories_col_name] = data[categories_col_name].apply(lambda x: [y.strip() for y in x])
+
+    all_categories = set()
+    for item in data[categories_col_name]:
+        for category in item:
+            all_categories.add(category)
+    
+    all_categories = sorted(list(all_categories))
+    data = pd.concat([data, pd.DataFrame(columns=all_categories)], axis=1)
+    for index, row in data.iterrows():
+        for category in row[probs_col_name].keys():
+            data.loc[index, category] = row[probs_col_name][category]
+    
+    data.fillna(0, inplace=True)
+    return data
